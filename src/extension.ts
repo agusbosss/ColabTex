@@ -2,6 +2,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import { runSetupWizard } from './tex/setupWizard';
+import { ChatViewProvider } from './chat/ChatViewProvider';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -24,6 +25,9 @@ export function activate(context: vscode.ExtensionContext) {
 		await runSetupWizard(context, 'manual');
 	});
 
+	const chatProvider = new ChatViewProvider(context.extensionUri);
+	const chatRegistration = vscode.window.registerWebviewViewProvider('colabtex-chatView', chatProvider);
+
 	let setupWizardShown = false;
 	const autoTrigger = vscode.workspace.onDidOpenTextDocument((doc) => {
 		if (setupWizardShown) {
@@ -37,7 +41,7 @@ export function activate(context: vscode.ExtensionContext) {
 		void runSetupWizard(context, 'auto', doc.fileName);
 	});
 
-	context.subscriptions.push(disposable, setupCheck, autoTrigger);
+	context.subscriptions.push(disposable, setupCheck, chatRegistration, autoTrigger);
 }
 
 // This method is called when your extension is deactivated

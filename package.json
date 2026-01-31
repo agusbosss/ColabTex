@@ -1,5 +1,6 @@
 {
   "name": "colabtex",
+  "publisher": "agusbosss",
   "displayName": "ColabTex",
   "description": "VS Code extension to assist with LaTeX workflows.",
   "version": "0.0.1",
@@ -25,10 +26,29 @@
   ],
   "activationEvents": [
     "onCommand:colabtex.helloWorld",
-    "onCommand:colabtex.runSetupCheck"
+    "onCommand:colabtex.runSetupCheck",
+    "onView:colabtex-chatView"
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "colabtex-sidebar",
+          "title": "ColabTex",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "colabtex-sidebar": [
+        {
+          "id": "colabtex-chatView",
+          "name": "Chat",
+          "type": "webview"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "colabtex.helloWorld",
