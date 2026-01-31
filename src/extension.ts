@@ -1,6 +1,7 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import { runSetupWizard } from './tex/setupWizard';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -19,7 +20,24 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.window.showInformationMessage('Hello World from ColabTex!');
 	});
 
-	context.subscriptions.push(disposable);
+	const setupCheck = vscode.commands.registerCommand('colabtex.runSetupCheck', async () => {
+		await runSetupWizard(context, 'manual');
+	});
+
+	let setupWizardShown = false;
+	const autoTrigger = vscode.workspace.onDidOpenTextDocument((doc) => {
+		if (setupWizardShown) {
+			return;
+		}
+		const isTexFile = doc.languageId === 'latex' || doc.fileName.toLowerCase().endsWith('.tex');
+		if (!isTexFile) {
+			return;
+		}
+		setupWizardShown = true;
+		void runSetupWizard(context, 'auto', doc.fileName);
+	});
+
+	context.subscriptions.push(disposable, setupCheck, autoTrigger);
 }
 
 // This method is called when your extension is deactivated

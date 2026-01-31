@@ -23,13 +23,20 @@
   "extensionDependencies": [
     "James-Yu.latex-workshop"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onCommand:colabtex.helloWorld",
+    "onCommand:colabtex.runSetupCheck"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "colabtex.helloWorld",
         "title": "Hello World"
+      },
+      {
+        "command": "colabtex.runSetupCheck",
+        "title": "LaTeX Agent: Run setup check"
       }
     ]
   },
