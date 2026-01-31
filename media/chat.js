@@ -5,6 +5,7 @@ const inputEl = document.getElementById('input');
 const sendEl = document.getElementById('send');
 
 let messages = [];
+let pendingAssistantId = null;
 
 function scrollToBottom() {
   messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -25,8 +26,28 @@ function persistMessages() {
   vscode.setState({ messages });
 }
 
-function appendMessage(text, role) {
-  messages.push({ text, role });
+function setLoading(isLoading) {
+  inputEl.disabled = isLoading;
+  sendEl.disabled = isLoading;
+}
+
+function appendMessage(text, role, id) {
+  const message = { text, role };
+  if (id) {
+    message.id = id;
+  }
+  messages.push(message);
+  renderMessages();
+  persistMessages();
+}
+
+function updateMessage(id, newText) {
+  const message = messages.find((item) => item.id === id);
+  if (message) {
+    message.text = newText;
+  } else {
+    messages.push({ text: newText, role: 'assistant' });
+  }
   renderMessages();
   persistMessages();
 }
@@ -37,7 +58,13 @@ function sendMessage() {
     return;
   }
   inputEl.value = '';
-  appendMessage(`You: ${text}`, 'user');
+  appendMessage(text, 'user');
+
+  const loadingId = `loading-${Date.now()}`;
+  pendingAssistantId = loadingId;
+  appendMessage('...', 'assistant', loadingId);
+  setLoading(true);
+
   vscode.postMessage({ type: 'userMessage', text });
 }
 
@@ -58,7 +85,13 @@ window.addEventListener('message', (event) => {
     return;
   }
   if (message.type === 'assistantMessage') {
-    appendMessage(`ColabTex: ${message.text}`, 'assistant');
+    if (pendingAssistantId) {
+      updateMessage(pendingAssistantId, message.text);
+      pendingAssistantId = null;
+    } else {
+      appendMessage(message.text, 'assistant');
+    }
+    setLoading(false);
   }
 });
 

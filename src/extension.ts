@@ -3,6 +3,7 @@
 import * as vscode from 'vscode';
 import { runSetupWizard } from './tex/setupWizard';
 import { ChatViewProvider } from './chat/ChatViewProvider';
+import { setOpenAIApiKey, clearOpenAIApiKey } from './secrets/openaiKey';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -25,7 +26,26 @@ export function activate(context: vscode.ExtensionContext) {
 		await runSetupWizard(context, 'manual');
 	});
 
-	const chatProvider = new ChatViewProvider(context.extensionUri);
+	const setApiKey = vscode.commands.registerCommand('colabtex.setOpenAIApiKey', async () => {
+		const value = await vscode.window.showInputBox({
+			prompt: 'Enter your OpenAI API key',
+			password: true,
+			ignoreFocusOut: true
+		});
+		if (!value || value.trim().length < 20) {
+			await vscode.window.showWarningMessage('ColabTex: API key not saved (empty or too short).');
+			return;
+		}
+		await setOpenAIApiKey(context, value.trim());
+		await vscode.window.showInformationMessage('ColabTex: API key saved.');
+	});
+
+	const clearApiKey = vscode.commands.registerCommand('colabtex.clearOpenAIApiKey', async () => {
+		await clearOpenAIApiKey(context);
+		await vscode.window.showInformationMessage('ColabTex: API key cleared.');
+	});
+
+	const chatProvider = new ChatViewProvider(context, context.extensionUri);
 	const chatRegistration = vscode.window.registerWebviewViewProvider('colabtex-chatView', chatProvider);
 
 	let setupWizardShown = false;
@@ -41,7 +61,7 @@ export function activate(context: vscode.ExtensionContext) {
 		void runSetupWizard(context, 'auto', doc.fileName);
 	});
 
-	context.subscriptions.push(disposable, setupCheck, chatRegistration, autoTrigger);
+	context.subscriptions.push(disposable, setupCheck, setApiKey, clearApiKey, chatRegistration, autoTrigger);
 }
 
 // This method is called when your extension is deactivated

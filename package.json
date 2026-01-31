@@ -27,7 +27,9 @@
   "activationEvents": [
     "onCommand:colabtex.helloWorld",
     "onCommand:colabtex.runSetupCheck",
-    "onView:colabtex-chatView"
+    "onView:colabtex-chatView",
+    "onCommand:colabtex.setOpenAIApiKey",
+    "onCommand:colabtex.clearOpenAIApiKey"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -57,6 +59,14 @@
       {
         "command": "colabtex.runSetupCheck",
         "title": "LaTeX Agent: Run setup check"
+      },
+      {
+        "command": "colabtex.setOpenAIApiKey",
+        "title": "ColabTex: Set OpenAI API Key"
+      },
+      {
+        "command": "colabtex.clearOpenAIApiKey",
+        "title": "ColabTex: Clear OpenAI API Key"
       }
     ]
   },
