@@ -29,7 +29,11 @@
     "onCommand:colabtex.runSetupCheck",
     "onView:colabtex-chatView",
     "onCommand:colabtex.setOpenAIApiKey",
-    "onCommand:colabtex.clearOpenAIApiKey"
+    "onCommand:colabtex.clearOpenAIApiKey",
+    "onCommand:colabtex.previewProposedChanges",
+    "onCommand:colabtex.applyProposedChanges",
+    "onCommand:colabtex.discardProposedChanges",
+    "onCommand:colabtex.buildLatexOptional"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -67,6 +71,22 @@
       {
         "command": "colabtex.clearOpenAIApiKey",
         "title": "ColabTex: Clear OpenAI API Key"
+      },
+      {
+        "command": "colabtex.previewProposedChanges",
+        "title": "ColabTex: Preview Proposed Changes"
+      },
+      {
+        "command": "colabtex.applyProposedChanges",
+        "title": "ColabTex: Apply Proposed Changes"
+      },
+      {
+        "command": "colabtex.discardProposedChanges",
+        "title": "ColabTex: Discard Proposed Changes"
+      },
+      {
+        "command": "colabtex.buildLatexOptional",
+        "title": "ColabTex: Build LaTeX (optional)"
       }
     ]
   },
@@ -77,6 +97,9 @@
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
     "test": "vscode-test"
+  },
+  "dependencies": {
+    "ajv": "^8.12.0"
   },
   "devDependencies": {
     "@types/vscode": "^1.108.1",

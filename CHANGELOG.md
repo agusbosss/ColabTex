@@ -6,7 +6,9 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased] - YYYY-MM-DD
 ### Added
-- _TBD_
+- Store OpenAI API key in SecretStorage (BYOK).
+- Set/Clear OpenAI API key commands.
+- Chat uses OpenAI Responses API (non-streaming).
 ### Changed
 - _TBD_
 ### Fixed
@@ -18,11 +20,11 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [0.0.1] - 2026-01-31
 ### Added
-- Bootstrap de extensi√≥n VS Code en TypeScript (comando Hello World).
+- Bootstrap de extensiÛn VS Code en TypeScript (comando Hello World).
 - Extension pack: incluye LaTeX Workshop (James-Yu.latex-workshop) y dependencia declarada.
 - VSIX packaging verificado.
 ### Changed
-- Metadata de publicaci√≥n: repository, homepage, bugs y LICENSE.
+- Metadata de publicaciÛn: repository, homepage, bugs y LICENSE.
 ### Fixed
 - _N/A_
 ### Removed
@@ -33,10 +35,10 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 ## Maintenance
 - Actualizar el changelog cuando:
   1) se prepara un release/tag
-  2) se agrega/remueve un comando o contribuci√≥n visible
+  2) se agrega/remueve un comando o contribuciÛn visible
   3) se cambia comportamiento del usuario
   4) se corrige un bug relevante
 - Flujo:
-  - Acumular cambios en ‚ÄúUnreleased‚Äù.
-  - Al release: mover Unreleased a nueva versi√≥n, poner fecha, y crear un nuevo Unreleased vac√≠o arriba.
+  - Acumular cambios en ìUnreleasedî.
+  - Al release: mover Unreleased a nueva versiÛn, poner fecha, y crear un nuevo Unreleased vacÌo arriba.
 - Regla: 1 bullet = 1 cambio user-facing. Evitar detalles internos salvo que afecten a usuario.

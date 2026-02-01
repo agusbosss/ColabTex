@@ -4,6 +4,9 @@ import * as vscode from 'vscode';
 import { runSetupWizard } from './tex/setupWizard';
 import { ChatViewProvider } from './chat/ChatViewProvider';
 import { setOpenAIApiKey, clearOpenAIApiKey } from './secrets/openaiKey';
+import { PreviewContentProvider } from './patch/previewProvider';
+import { PatchPlanService } from './patch/patchPlanService';
+import { buildLatex, readLastBuildLog } from './latex/build';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -45,7 +48,54 @@ export function activate(context: vscode.ExtensionContext) {
 		await vscode.window.showInformationMessage('ColabTex: API key cleared.');
 	});
 
-	const chatProvider = new ChatViewProvider(context, context.extensionUri);
+	const outputChannel = vscode.window.createOutputChannel('ColabTex');
+	const previewProvider = new PreviewContentProvider();
+	const previewRegistration = vscode.workspace.registerTextDocumentContentProvider('colabtex-preview', previewProvider);
+	const patchPlanService = new PatchPlanService(previewProvider);
+
+	const previewChanges = vscode.commands.registerCommand('colabtex.previewProposedChanges', async () => {
+		try {
+			await patchPlanService.showDiffs();
+		} catch (error) {
+			const message = error instanceof Error ? error.message : 'Unable to preview changes.';
+			await vscode.window.showWarningMessage(`ColabTex: ${message}`);
+		}
+	});
+
+	const applyChanges = vscode.commands.registerCommand('colabtex.applyProposedChanges', async () => {
+		try {
+			await patchPlanService.applyCurrentPlan();
+			await vscode.window.showInformationMessage('ColabTex: Changes applied.');
+		} catch (error) {
+			const message = error instanceof Error ? error.message : 'Unable to apply changes.';
+			await vscode.window.showWarningMessage(`ColabTex: ${message}`);
+		}
+	});
+
+	const discardChanges = vscode.commands.registerCommand('colabtex.discardProposedChanges', async () => {
+		patchPlanService.clearPlan();
+		await vscode.window.showInformationMessage('ColabTex: Proposed changes discarded.');
+	});
+
+	const buildLatexCmd = vscode.commands.registerCommand('colabtex.buildLatexOptional', async () => {
+		const result = await buildLatex();
+		outputChannel.appendLine(`[Build] ok=${result.ok}`);
+		if (result.stdout) {
+			outputChannel.appendLine(result.stdout);
+		}
+		if (result.stderr) {
+			outputChannel.appendLine(result.stderr);
+		}
+		outputChannel.show(true);
+		if (!result.ok) {
+			const log = await readLastBuildLog();
+			await vscode.window.showWarningMessage('ColabTex: Build failed. See Output and log for details.');
+			outputChannel.appendLine('[Build Log]');
+			outputChannel.appendLine(log);
+		}
+	});
+
+	const chatProvider = new ChatViewProvider(context, context.extensionUri, patchPlanService, outputChannel);
 	const chatRegistration = vscode.window.registerWebviewViewProvider('colabtex-chatView', chatProvider);
 
 	let setupWizardShown = false;
@@ -61,7 +111,19 @@ export function activate(context: vscode.ExtensionContext) {
 		void runSetupWizard(context, 'auto', doc.fileName);
 	});
 
-	context.subscriptions.push(disposable, setupCheck, setApiKey, clearApiKey, chatRegistration, autoTrigger);
+	context.subscriptions.push(
+		disposable,
+		setupCheck,
+		setApiKey,
+		clearApiKey,
+		previewChanges,
+		applyChanges,
+		discardChanges,
+		buildLatexCmd,
+		previewRegistration,
+		chatRegistration,
+		autoTrigger
+	);
 }
 
 // This method is called when your extension is deactivated

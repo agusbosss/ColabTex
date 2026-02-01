@@ -176,6 +176,9 @@ Estados típicos:
 
 ## Convenciones de implementación
 
+### Entrega de cambios (respuesta)
+- Preferencia del repo: entregar solo diffs (no archivos completos), salvo que el usuario pida lo contrario.
+
 ### Edición de archivos (forma correcta)
 - El LLM propone cambios en un **formato estructurado**.
 - La extensión valida y muestra **preview**.

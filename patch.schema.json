@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ColabTex PatchPlan v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "summary", "edits"],
+  "properties": {
+    "version": { "type": "string", "const": "1.0" },
+    "summary": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "edits": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 200,
+      "items": { "$ref": "#/$defs/EditOp" }
+    }
+  },
+  "$defs": {
+    "WorkspacePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 260,
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*\\0)(?!.*\\.{2})(?!.*://).+"
+    },
+    "Position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["line", "character"],
+      "properties": {
+        "line": { "type": "integer", "minimum": 0, "maximum": 200000 },
+        "character": { "type": "integer", "minimum": 0, "maximum": 200000 }
+      }
+    },
+    "Range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "$ref": "#/$defs/Position" },
+        "end": { "$ref": "#/$defs/Position" }
+      }
+    },
+    "TextEdit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["range", "text"],
+      "properties": {
+        "range": { "$ref": "#/$defs/Range" },
+        "text": { "type": "string" }
+      }
+    },
+    "CreateFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "path", "content"],
+      "properties": {
+        "op": { "type": "string", "const": "createFile" },
+        "path": { "$ref": "#/$defs/WorkspacePath" },
+        "content": { "type": "string" },
+        "overwrite": { "type": "boolean", "default": false }
+      }
+    },
+    "EditFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "path", "edits"],
+      "properties": {
+        "op": { "type": "string", "const": "editFile" },
+        "path": { "$ref": "#/$defs/WorkspacePath" },
+        "edits": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 500,
+          "items": { "$ref": "#/$defs/TextEdit" }
+        }
+      }
+    },
+    "EditOp": {
+      "oneOf": [
+        { "$ref": "#/$defs/CreateFile" },
+        { "$ref": "#/$defs/EditFile" }
+      ]
+    }
+  }
+}
