@@ -45,6 +45,41 @@ body {
   color: #0f172a;
 }
 
+.message.patch-pending {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.patch-summary {
+  font-weight: 600;
+}
+
+.patch-target {
+  font-size: 12px;
+  color: #475569;
+}
+
+.patch-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.patch-actions button {
+  padding: 6px 10px;
+  border: 1px solid #cbd5f5;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.patch-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 #composer {
   border-top: 1px solid #e2e8f0;
   padding: 10px;

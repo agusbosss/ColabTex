@@ -2,6 +2,7 @@ export type PatchPlan = {
 	version: '1.0';
 	summary: string;
 	edits: PatchEdit[];
+	planId?: string;
 };
 
 export type PatchEdit = CreateFileOp | EditFileOp;

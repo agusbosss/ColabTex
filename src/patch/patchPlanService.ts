@@ -14,6 +14,7 @@ export class PatchPlanService {
 	private readonly previewProvider: PreviewContentProvider;
 	private readonly scheme = 'colabtex-preview';
 	private currentPlan: PatchPlan | undefined;
+	private currentPlanId: string | undefined;
 	private previews = new Map<string, PatchPreview>();
 
 	constructor(previewProvider: PreviewContentProvider) {
@@ -21,7 +22,9 @@ export class PatchPlanService {
 	}
 
 	setPlan(plan: PatchPlan): void {
-		this.currentPlan = plan;
+		const planId = plan.planId ?? this.generatePlanId();
+		this.currentPlan = { ...plan, planId };
+		this.currentPlanId = planId;
 		this.previews.clear();
 	}
 
@@ -29,8 +32,42 @@ export class PatchPlanService {
 		return this.currentPlan;
 	}
 
+	getPlanId(): string | undefined {
+		return this.currentPlanId;
+	}
+
+	getPlanSummary(): string | undefined {
+		return this.currentPlan?.summary;
+	}
+
+	getPlanTargetFiles(): string[] {
+		const plan = this.currentPlan;
+		if (!plan) {
+			return [];
+		}
+		const paths = new Set<string>();
+		for (const edit of plan.edits) {
+			paths.add(edit.path);
+		}
+		return Array.from(paths);
+	}
+
+	getPrimaryTargetFile(): string | undefined {
+		const plan = this.currentPlan;
+		if (!plan) {
+			return undefined;
+		}
+		const createOp = plan.edits.find((edit) => edit.op === 'createFile');
+		if (createOp) {
+			return createOp.path;
+		}
+		const editOp = plan.edits.find((edit) => edit.op === 'editFile');
+		return editOp?.path;
+	}
+
 	clearPlan(): void {
 		this.currentPlan = undefined;
+		this.currentPlanId = undefined;
 		this.previews.clear();
 		this.previewProvider.clear();
 	}
@@ -59,6 +96,7 @@ export class PatchPlanService {
 
 		for (const editOp of editOps) {
 			ensureSafePath(editOp.path);
+			validateEdits(editOp.path, editOp.edits);
 			const fileUri = vscode.Uri.joinPath(workspaceRoot, editOp.path);
 			const beforeContent = await readFileSafe(fileUri);
 			const afterContent = applyTextEdits(beforeContent, editOp.edits);
@@ -121,6 +159,7 @@ export class PatchPlanService {
 
 		for (const editOp of editOps) {
 			ensureSafePath(editOp.path);
+			validateEdits(editOp.path, editOp.edits);
 			const fileUri = vscode.Uri.joinPath(workspaceRoot, editOp.path);
 			for (const textEdit of editOp.edits) {
 				const range = new vscode.Range(
@@ -141,6 +180,10 @@ export class PatchPlanService {
 	private previewUri(relPath: string, variant: 'before' | 'after'): vscode.Uri {
 		const encoded = encodeURIComponent(relPath);
 		return vscode.Uri.parse(`${this.scheme}:/${encoded}?v=${variant}-${Date.now()}`);
+	}
+
+	private generatePlanId(): string {
+		return `plan_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 	}
 }
 
@@ -192,6 +235,43 @@ function applyTextEdits(text: string, edits: TextEdit[]): string {
 		result = result.slice(0, edit.start) + edit.text + result.slice(edit.end);
 	}
 	return result;
+}
+
+function validateEdits(pathLabel: string, edits: TextEdit[]): void {
+	const ranges = edits.map((edit) => {
+		const start = edit.range.start;
+		const end = edit.range.end;
+		if (start.line < 0 || start.character < 0 || end.line < 0 || end.character < 0) {
+			throw new Error(`Invalid range in file ${pathLabel}: negative positions.`);
+		}
+		if (isAfter(start, end)) {
+			throw new Error(`Invalid range in file ${pathLabel}: start after end.`);
+		}
+		return {
+			start,
+			end
+		};
+	});
+
+	ranges.sort((a, b) => comparePos(a.start, b.start));
+	for (let i = 1; i < ranges.length; i += 1) {
+		const prev = ranges[i - 1];
+		const curr = ranges[i];
+		if (isAfter(prev.end, curr.start)) {
+			throw new Error(`Overlapping edits in file ${pathLabel}.`);
+		}
+	}
+}
+
+function comparePos(a: { line: number; character: number }, b: { line: number; character: number }): number {
+	if (a.line !== b.line) {
+		return a.line - b.line;
+	}
+	return a.character - b.character;
+}
+
+function isAfter(a: { line: number; character: number }, b: { line: number; character: number }): boolean {
+	return a.line > b.line || (a.line === b.line && a.character > b.character);
 }
 
 function computeLineOffsets(text: string): number[] {

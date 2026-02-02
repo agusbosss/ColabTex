@@ -35,8 +35,12 @@ export async function createFile(relPath: string, content: string, overwrite = f
 		// file does not exist
 	}
 
-	const dirUri = vscode.Uri.joinPath(fileUri, '..');
-	await vscode.workspace.fs.createDirectory(dirUri);
+	const root = getWorkspaceRoot();
+	const dir = path.posix.dirname(relPath);
+	if (dir !== '.') {
+		const dirUri = vscode.Uri.joinPath(root, dir);
+		await vscode.workspace.fs.createDirectory(dirUri);
+	}
 	await vscode.workspace.fs.writeFile(fileUri, Buffer.from(content, 'utf8'));
 }
 
@@ -91,10 +95,11 @@ function resolveWorkspacePath(relPath: string): vscode.Uri {
 
 function getRelativePath(uri: vscode.Uri): string | undefined {
 	const root = getWorkspaceRoot().fsPath;
-	if (!uri.fsPath.startsWith(root)) {
+	const rel = path.relative(root, uri.fsPath);
+	if (path.isAbsolute(rel) || rel.startsWith('..')) {
 		return undefined;
 	}
-	return path.relative(root, uri.fsPath).replace(/\\/g, '/');
+	return rel.replace(/\\/g, '/');
 }
 
 function getWorkspaceRoot(): vscode.Uri {

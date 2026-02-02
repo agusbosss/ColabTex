@@ -1,6 +1,7 @@
 export type OpenAIRequestParams = {
 	apiKey: string;
 	inputText: string;
+	textFormat?: unknown;
 };
 
 function extractOutputText(payload: unknown): string | undefined {
@@ -48,7 +49,8 @@ export async function callOpenAI(params: OpenAIRequestParams): Promise<string> {
 		body: JSON.stringify({
 			model: 'gpt-4o-mini',
 			input: params.inputText,
-			temperature: 0.2
+			temperature: 0.2,
+			...(params.textFormat ? { text: { format: params.textFormat } } : {})
 		})
 	});
 
@@ -66,6 +68,9 @@ export async function callOpenAI(params: OpenAIRequestParams): Promise<string> {
 		}
 		if (status === 429) {
 			throw new Error('RATE_LIMIT');
+		}
+		if (status == 400) {
+			throw new Error(`OPENAI_REQUEST_INVALID:${shortErrorMessage(payload)}`);
 		}
 		throw new Error(`OPENAI_ERROR:${status}:${shortErrorMessage(payload)}`);
 	}

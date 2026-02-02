@@ -21,17 +21,40 @@ export async function generatePatchPlan(
 
 	const basePrompt = buildPrompt(userText, schemaText, toolContext, options?.stickyTarget, options?.reason);
 
-	const first = await callOpenAI({ apiKey, inputText: basePrompt });
+	const first = await callOpenAI({
+		apiKey,
+		inputText: basePrompt,
+		textFormat: {
+			type: 'json_object'
+		}
+	});
 	const firstParsed = await parseAndValidate(first, context.extensionUri);
+	let firstError: string | undefined;
 	if (firstParsed.ok) {
-		return ensurePatchPlan(firstParsed.value);
+		const conflictError = await getCreateConflictError(ensurePatchPlan(firstParsed.value));
+		if (!conflictError) {
+			return ensurePatchPlan(firstParsed.value);
+		}
+		firstError = conflictError;
+	} else {
+		firstError = firstParsed.error;
 	}
 
-	const retryPrompt = `${basePrompt}\n\nYour output was invalid. Return ONLY JSON matching the schema. No markdown. No prose.\nErrors: ${firstParsed.error}`;
-	const retry = await callOpenAI({ apiKey, inputText: retryPrompt });
+	const retryPrompt = `${basePrompt}\n\nReturn ONLY a single JSON object. No markdown. No prose. Errors: ${firstError}`;
+	const retry = await callOpenAI({
+		apiKey,
+		inputText: retryPrompt,
+		textFormat: {
+			type: 'json_object'
+		}
+	});
 	const retryParsed = await parseAndValidate(retry, context.extensionUri);
 	if (retryParsed.ok) {
-		return ensurePatchPlan(retryParsed.value);
+		const conflictError = await getCreateConflictError(ensurePatchPlan(retryParsed.value));
+		if (!conflictError) {
+			return ensurePatchPlan(retryParsed.value);
+		}
+		throw new Error(`PatchPlan validation failed: ${conflictError}`);
 	}
 
 	throw new Error(`PatchPlan validation failed: ${retryParsed.error}`);
@@ -128,7 +151,7 @@ function buildPrompt(
 	const stickyBlock = stickyTarget ? `Sticky target: ${stickyTarget}` : 'Sticky target: (none)';
 	const reasonBlock = reason?.length ? `Intent reasons: ${reason.join(', ')}` : 'Intent reasons: (none)';
 
-	return `You are a code editing agent for a LaTeX workspace.\n\nReturn ONLY JSON matching the schema. No markdown. No prose.\n\nSTRICT RULES:\n- Output must be a single JSON object with version, summary, edits.\n- edits items must be either:\n  1) {\"op\":\"createFile\",\"path\":\"...\",\"content\":\"...\",\"overwrite\":false}\n  2) {\"op\":\"editFile\",\"path\":\"...\",\"edits\":[{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":0,\"character\":0}},\"text\":\"...\"}]}\n- Do NOT include any other fields.\n- Edit the existing target file, do NOT output generic templates. Preserve style and structure.\n- If insertion location is unclear, choose a reasonable location based on the current content.\n\nEXAMPLES:\nUser: Ponele fecha 31/01/2026 a \\date{\\today} en CV.tex\nOutput:\n{\"version\":\"1.0\",\"summary\":\"Set CV date\",\"edits\":[{\"op\":\"editFile\",\"path\":\"CV.tex\",\"edits\":[{\"range\":{\"start\":{\"line\":4,\"character\":6},\"end\":{\"line\":4,\"character\":13}},\"text\":\"31/01/2026\"}]}]}\n\nUser: hacé que el CV sea mucho más amplio y detallado añadiendo secciones y divisores\nOutput:\n{\"version\":\"1.0\",\"summary\":\"Expand CV sections\",\"edits\":[{\"op\":\"editFile\",\"path\":\"CV.tex\",\"edits\":[{\"range\":{\"start\":{\"line\":10,\"character\":0},\"end\":{\"line\":10,\"character\":0}},\"text\":\"\\\\section{Experiencia}\\n...\"}]}]}\n\nUser: mejorá este párrafo\nOutput:\n{\"version\":\"1.0\",\"summary\":\"Improve paragraph\",\"edits\":[{\"op\":\"editFile\",\"path\":\"main.tex\",\"edits\":[{\"range\":{\"start\":{\"line\":10,\"character\":0},\"end\":{\"line\":12,\"character\":0}},\"text\":\"Texto mejorado...\"}]}]}\n\nSchema:\n${schemaText}\n\nWorkspace files (tex/bib/sty/cls):\n${context.texFiles.join('\\n') || '(none)'}\n\n${mainBlock}\n\n${explicitBlock}\n\n${targetBlock}\n\n${stickyBlock}\n${reasonBlock}\n\n${selectionBlock}\n\nUser request:\n${userText}\n`;
+	return `You are a code editing agent for a LaTeX workspace.\n\nReturn ONLY JSON matching the schema. No markdown. No prose.\n\nSTRICT RULES:\n- Output must be a single JSON object with version, summary, edits.\n- edits items must be either:\n  1) {\"op\":\"createFile\",\"path\":\"...\",\"content\":\"...\",\"overwrite\":false}\n  2) {\"op\":\"editFile\",\"path\":\"...\",\"edits\":[{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":0,\"character\":0}},\"text\":\"...\"}]}\n- Do NOT include any other fields.\n- Preserve style and structure when editing existing files. If the user asks for a template, you may create one.\n- If the request is for an article template and no clear target exists, create or edit main.tex. If the request is for a CV, prefer CV.tex.\n- If the target file already exists, prefer editFile. Only use createFile for new files.\n- If insertion location is unclear, choose a reasonable location based on the current content.\n\nEXAMPLES:\nUser: Ponele fecha 31/01/2026 a \\date{\\today} en CV.tex\nOutput:\n{\"version\":\"1.0\",\"summary\":\"Set CV date\",\"edits\":[{\"op\":\"editFile\",\"path\":\"CV.tex\",\"edits\":[{\"range\":{\"start\":{\"line\":4,\"character\":6},\"end\":{\"line\":4,\"character\":13}},\"text\":\"31/01/2026\"}]}]}\n\nUser: hacé que el CV sea mucho más amplio y detallado añadiendo secciones y divisores\nOutput:\n{\"version\":\"1.0\",\"summary\":\"Expand CV sections\",\"edits\":[{\"op\":\"editFile\",\"path\":\"CV.tex\",\"edits\":[{\"range\":{\"start\":{\"line\":10,\"character\":0},\"end\":{\"line\":10,\"character\":0}},\"text\":\"\\\\section{Experiencia}\\n...\"}]}]}\n\nUser: mejorá este párrafo\nOutput:\n{\"version\":\"1.0\",\"summary\":\"Improve paragraph\",\"edits\":[{\"op\":\"editFile\",\"path\":\"main.tex\",\"edits\":[{\"range\":{\"start\":{\"line\":10,\"character\":0},\"end\":{\"line\":12,\"character\":0}},\"text\":\"Texto mejorado...\"}]}]}\n\nSchema:\n${schemaText}\n\nWorkspace files (tex/bib/sty/cls):\n${context.texFiles.join('\\n') || '(none)'}\n\n${mainBlock}\n\n${explicitBlock}\n\n${targetBlock}\n\n${stickyBlock}\n${reasonBlock}\n\n${selectionBlock}\n\nUser request:\n${userText}\n`;
 }
 
 async function parseAndValidate(
@@ -139,11 +162,57 @@ async function parseAndValidate(
 	if (!parsed.ok) {
 		return { ok: false, error: `JSON parse failed: ${parsed.error}` };
 	}
-	const validation = await validatePatchPlan(parsed.value, extensionUri);
+	const normalized = normalizePatchPlan(parsed.value);
+	const validation = await validatePatchPlan(normalized, extensionUri);
 	if (!validation.ok) {
 		return { ok: false, error: `Schema validation failed: ${(validation.errors ?? []).join('; ')}` };
 	}
-	return { ok: true, value: parsed.value };
+	return { ok: true, value: normalized };
+}
+
+function normalizePatchPlan(value: unknown): unknown {
+	if (!value || typeof value !== 'object') {
+		return value;
+	}
+	const plan = value as { version?: unknown; summary?: unknown; edits?: unknown };
+	const edits = Array.isArray(plan.edits) ? plan.edits : [];
+	const normalizedEdits = edits.map((edit) => {
+		if (!edit || typeof edit !== 'object') {
+			return edit;
+		}
+		const op = (edit as { op?: unknown }).op;
+		const path = (edit as { path?: unknown }).path;
+		if (op === 'createFile') {
+			const content = (edit as { content?: unknown }).content;
+			const overwrite = (edit as { overwrite?: unknown }).overwrite;
+			const result: { op: 'createFile'; path?: unknown; content?: unknown; overwrite?: boolean } = {
+				op: 'createFile'
+			};
+			if (typeof path === 'string') {
+				result.path = path;
+			}
+			if (typeof content === 'string') {
+				result.content = content;
+			}
+			result.overwrite = typeof overwrite === 'boolean' ? overwrite : false;
+			return result;
+		}
+		if (op === 'editFile') {
+			const editsList = (edit as { edits?: unknown }).edits;
+			const result: { op: 'editFile'; path?: unknown; edits?: unknown } = { op: 'editFile' };
+			if (typeof path === 'string') {
+				result.path = path;
+			}
+			result.edits = Array.isArray(editsList) ? editsList : [];
+			return result;
+		}
+		return edit;
+	});
+	return {
+		version: plan.version,
+		summary: plan.summary,
+		edits: normalizedEdits
+	};
 }
 
 function parseJson(text: string): { ok: true; value: unknown } | { ok: false; error: string } {
@@ -192,4 +261,40 @@ function findExplicitFile(userText: string, files: string[]): string | undefined
 		return extMatch[1];
 	}
 	return undefined;
+}
+
+
+
+async function getCreateConflictError(plan: PatchPlan): Promise<string | undefined> {
+	const conflicts: string[] = [];
+	for (const edit of plan.edits) {
+		if (edit.op !== 'createFile') {
+			continue;
+		}
+		if (edit.overwrite) {
+			continue;
+		}
+		const exists = await fileExists(edit.path);
+		if (exists) {
+			conflicts.push(edit.path);
+		}
+	}
+	if (!conflicts.length) {
+		return undefined;
+	}
+	return `CreateFile target already exists: ${conflicts.join(', ')}. Use editFile or choose a new filename (e.g., article.tex).`;
+}
+
+async function fileExists(relPath: string): Promise<boolean> {
+	const folder = vscode.workspace.workspaceFolders?.[0];
+	if (!folder) {
+		return false;
+	}
+	const uri = vscode.Uri.joinPath(folder.uri, relPath);
+	try {
+		await vscode.workspace.fs.stat(uri);
+		return true;
+	} catch {
+		return false;
+	}
 }

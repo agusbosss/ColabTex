@@ -14,49 +14,80 @@ export type IntentResult = {
 };
 
 const EDIT_VERBS = [
-	'edita',
-	'edit',
-	'cambia',
-	'cambiar',
-	'reemplaza',
-	'reemplazar',
+	'anadi',
+	'anadile',
 	'agrega',
-	'agregar',
-	'poné',
-	'ponele',
-	'pone',
-	'escribí',
-	'escribe',
-	'hacé',
-	'hace',
-	'amplía',
-	'amplia',
-	'expandí',
-	'expande',
-	'expand',
+	'agregale',
+	'sumale',
+	'inclui',
+	'inserta',
+	'insertale',
+	'borra',
+	'saca',
+	'elimina',
+	'cambia',
+	'modifica',
+	'reemplaza',
+	'mueve',
+	'ajusta',
 	'corrige',
+	'add',
+	'insert',
+	'remove',
+	'delete',
+	'change',
+	'modify',
+	'replace',
+	'move',
+	'adjust',
 	'fix',
 	'update',
-	'replace',
-	'add',
 	'create',
+	'crear'
+];
+
+const CREATE_VERBS = [
 	'crear',
-	'inserta',
-	'insertar',
-	'insert',
-	'elimina',
-	'eliminar',
-	'remove',
-	'cambia',
-	'change',
-	'mejorá',
-	'mejora',
-	'mejorar',
-	'improve',
-	'rewrite',
-	'reescribe',
-	'reescribir',
-	'refactor'
+	'crea',
+	'generar',
+	'genera',
+	'armar',
+	'arma',
+	'hacer',
+	'hace',
+	'escribir',
+	'escribe',
+	'redactar',
+	'redacta',
+	'disenar',
+	'create',
+	'generate',
+	'draft',
+	'build'
+];
+
+const DOC_NOUNS = ['plantilla', 'template', 'cv', 'curriculum', 'resume', 'article'];
+
+const LATEX_NOUNS = [
+	'seccion',
+	'subseccion',
+	'referencias',
+	'bibliografia',
+	'citas',
+	'cite',
+	'bib',
+	'tabla',
+	'figura',
+	'ecuacion',
+	'abstract',
+	'titulo',
+	'section',
+	'references',
+	'bibliography',
+	'citations',
+	'table',
+	'figure',
+	'equation'
 ];
 
 const LATEX_PATTERNS = [
@@ -68,7 +99,7 @@ const LATEX_PATTERNS = [
 ];
 
 const FILE_EXT_RE = /\.(tex|bib|sty|cls)\b/i;
-const DOC_KEYWORDS = ['cv', 'curriculum', 'currículum', 'resume'];
+const DOC_KEYWORDS = ['cv', 'curriculum', 'resume'];
 
 export function classifyIntent(
 	userMessage: string,
@@ -82,12 +113,51 @@ export function classifyIntent(
 	}
 ): IntentResult {
 	const reasons: string[] = [];
-	const normalized = userMessage.toLowerCase();
+	const normalized = normalizeText(userMessage);
 
 	const explicitFile = findExplicitFile(userMessage, context.filesList);
 	if (explicitFile) {
 		reasons.push(`file-mention:${explicitFile}`);
 		return { intent: 'edit', targetFile: explicitFile, reasons };
+	}
+
+	const hasEditSignal = hasEditVerb(normalized) || hasLatexNoun(normalized);
+	if (isLikelyGreeting(normalized) && !hasEditSignal && !hasCreateDocIntent(normalized)) {
+		return { intent: 'chat', reasons: ['greeting'] };
+	}
+	if (looksLikeQuestion(normalized) && !hasEditSignal && !hasCreateDocIntent(normalized)) {
+		return { intent: 'chat', reasons: ['question'] };
+	}
+
+	if (hasCreateDocIntent(normalized)) {
+		const target = pickDocumentTarget(context.filesList, context.recentFiles) ?? 'CV.tex';
+		reasons.push('create-doc-intent');
+		if (target === 'CV.tex' && !context.filesList.some((f) => f.toLowerCase() === 'cv.tex')) {
+			reasons.push('assumed-target:CV.tex');
+		}
+		return { intent: 'edit', targetFile: target, reasons };
+	}
+
+	if (hasEditSignal) {
+		const target = pickEditTarget(context);
+		if (target) {
+			reasons.push('edit-signal');
+			return { intent: 'edit', targetFile: target, reasons };
+		}
+		return { intent: 'edit', reasons: ['edit-signal'] };
+	}
+
+	if (!looksLikeQuestion(normalized) && (hasEditSignal || hasImproveVerb(normalized))) {
+		const stickyTarget = context.sticky?.lastTargetFile;
+		const activeTarget =
+			context.activeEditorPath && context.activeEditorPath.toLowerCase().endsWith('.tex')
+				? context.activeEditorPath
+				: undefined;
+		const target = stickyTarget ?? activeTarget;
+		if (target) {
+			reasons.push('sticky-or-active-followup');
+			return { intent: 'edit', targetFile: target, reasons };
+		}
 	}
 
 	if (context.pendingPatch && hasEditVerb(normalized)) {
@@ -165,7 +235,7 @@ function hasEditVerb(normalized: string): boolean {
 }
 
 function hasImproveVerb(normalized: string): boolean {
-	return ['mejorá', 'mejora', 'mejorar', 'improve', 'rewrite', 'reescribe', 'reescribir'].some((verb) =>
+	return ['mejora', 'mejorar', 'improve', 'rewrite', 'reescribe', 'reescribir'].some((verb) =>
 		normalized.includes(verb)
 	);
 }
@@ -196,4 +266,53 @@ function pickDocumentTarget(files: string[], recentFiles?: string[]): string | u
 	}
 	const firstTex = files.find((file) => file.toLowerCase().endsWith('.tex'));
 	return firstTex;
+}
+
+function hasCreateDocIntent(normalized: string): boolean {
+	const hasVerb = CREATE_VERBS.some((verb) => normalized.includes(verb));
+	const hasNoun = DOC_NOUNS.some((noun) => normalized.includes(noun));
+	return hasVerb && hasNoun;
+}
+
+function looksLikeQuestion(normalized: string): boolean {
+	if (normalized.includes('?')) {
+		return true;
+	}
+	const starters = ['que ', 'como ', 'por que', 'explicame', 'diferencia', 'what ', 'how ', 'why '];
+	return starters.some((start) => normalized.startsWith(start));
+}
+function normalizeText(input: string): string {
+	return input
+		.toLowerCase()
+		.normalize('NFD')
+		.replace(/[\u0300-\u036f]/g, '');
+}
+
+function isLikelyGreeting(normalized: string): boolean {
+	const cleaned = normalized.replace(/[^a-z0-9\\s]/g, ' ').trim();
+	const tokens = cleaned.split(/\\s+/).filter(Boolean);
+	if (tokens.length <= 2) {
+		const greetings = new Set(['hola', 'buenas', 'buenos', 'buenas', 'hello', 'hi', 'hey']);
+		return tokens.every((token) => greetings.has(token));
+	}
+	return false;
+}
+
+function hasLatexNoun(normalized: string): boolean {
+	return LATEX_NOUNS.some((noun) => normalized.includes(noun));
+}
+
+function pickEditTarget(context: {
+	filesList: string[];
+	activeEditorPath?: string;
+	sticky?: StickyState;
+	recentFiles?: string[];
+}): string | undefined {
+	if (context.sticky?.lastTargetFile) {
+		return context.sticky.lastTargetFile;
+	}
+	if (context.activeEditorPath && context.activeEditorPath.toLowerCase().endsWith('.tex')) {
+		return context.activeEditorPath;
+	}
+	return pickDocumentTarget(context.filesList, context.recentFiles);
 }

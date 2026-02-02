@@ -18,7 +18,7 @@ export async function buildLatex(mainFile?: string): Promise<BuildResult> {
 		return { ok: false, stdout: '', stderr: 'No main .tex file found.' };
 	}
 
-	const logUri = vscode.Uri.joinPath(root, '.colabtex', 'last-build.log');
+	const logUri = getBuildLogUri(root);
 	await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(root, '.colabtex'));
 
 	const result = await runCommand('latexmk', ['-pdf', '-interaction=nonstopmode', entry], root.fsPath);
@@ -27,7 +27,6 @@ export async function buildLatex(mainFile?: string): Promise<BuildResult> {
 	}
 	const combined = `${result.stdout}\n${result.stderr}`.trim();
 	await vscode.workspace.fs.writeFile(logUri, Buffer.from(combined, 'utf8'));
-	lastBuildLogPath = logUri;
 
 	return {
 		ok: !result.error && result.exitCode === 0,
@@ -38,11 +37,14 @@ export async function buildLatex(mainFile?: string): Promise<BuildResult> {
 }
 
 export async function readLastBuildLog(): Promise<string> {
-	if (!lastBuildLogPath) {
+	try {
+		const root = getWorkspaceRoot();
+		const logUri = getBuildLogUri(root);
+		const bytes = await vscode.workspace.fs.readFile(logUri);
+		return Buffer.from(bytes).toString('utf8');
+	} catch {
 		return 'No build log available.';
 	}
-	const bytes = await vscode.workspace.fs.readFile(lastBuildLogPath);
-	return Buffer.from(bytes).toString('utf8');
 }
 
 type ExecResult = { stdout: string; stderr: string; exitCode: number; error?: NodeJS.ErrnoException };
@@ -50,7 +52,8 @@ type ExecResult = { stdout: string; stderr: string; exitCode: number; error?: No
 function runCommand(command: string, args: string[], cwd: string): Promise<ExecResult> {
 	return new Promise((resolve) => {
 		execFile(command, args, { cwd, windowsHide: true }, (error, stdout, stderr) => {
-			const exitCode = Number((error as { code?: number })?.code ?? 0);
+			const code = (error as { code?: number | string })?.code;
+			const exitCode = typeof code === 'number' ? code : -1;
 			resolve({
 				stdout: stdout ?? '',
 				stderr: stderr ?? '',
@@ -67,4 +70,8 @@ function getWorkspaceRoot(): vscode.Uri {
 		throw new Error('No workspace folder open.');
 	}
 	return folder.uri;
+}
+
+function getBuildLogUri(root: vscode.Uri): vscode.Uri {
+	return vscode.Uri.joinPath(root, '.colabtex', 'last-build.log');
 }

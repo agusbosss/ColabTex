@@ -51,7 +51,7 @@
     "CreateFile": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["op", "path", "content"],
+      "required": ["op", "path", "content", "overwrite"],
       "properties": {
         "op": { "type": "string", "const": "createFile" },
         "path": { "$ref": "#/$defs/WorkspacePath" },
